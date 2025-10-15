@@ -70,6 +70,8 @@ async def text_chat(req: QueryRequest):
 async def analyze_fir(req: FIRAnalysisRequest):
     """Analyze FIR text and provide legal mapping."""
     print("Received FIR analysis request")
+    print(f"FIR Text: {req.fir_text[:200]}...")  # Print first 200 chars
+    print(f"Include Web Research: {req.include_web_research}")
     
     try:
         result = fir_analyzer.analyze_fir(
@@ -78,14 +80,40 @@ async def analyze_fir(req: FIRAnalysisRequest):
         )
         
         if result.get('error'):
+            print(f"Analysis error: {result.get('error_message', 'Analysis failed')}")
             return JSONResponse(
                 status_code=500,
                 content={"error": result.get('error_message', 'Analysis failed')}
             )
         
+        # Print the result data for evaluation
+        print("=" * 80)
+        print("FIR ANALYSIS RESULT:")
+        print("=" * 80)
+        print(f"Analysis Metadata: {result.get('analysis_metadata', {})}")
+        print(f"Case Type: {result.get('legal_analysis', {}).get('case_type', 'N/A')}")
+        print(f"Total Legal Sections: {result.get('legal_analysis', {}).get('total_sections', 0)}")
+        print(f"Investigation Priority: {result.get('legal_analysis', {}).get('investigation_priority', 'N/A')}")
+        
+        # Print extracted information
+        extracted_info = result.get('extracted_information', {})
+        print(f"Complainant: {extracted_info.get('Complainant', {})}")
+        print(f"Accused Count: {len(extracted_info.get('Accused', []))}")
+        print(f"Offences: {extracted_info.get('Offences', [])}")
+        print(f"Legal Sections: {result.get('legal_analysis', {}).get('legal_sections', [])}")
+        
+        # Print recommendations
+        recommendations = result.get('recommendations', [])
+        print(f"Recommendations ({len(recommendations)}):")
+        for i, rec in enumerate(recommendations, 1):
+            print(f"  {i}. {rec}")
+        
+        print("=" * 80)
+        
         return JSONResponse(result)
         
     except Exception as e:
+        print(f"Exception in FIR analysis: {str(e)}")
         return JSONResponse(
             status_code=500,
             content={"error": str(e), "message": "FIR analysis failed."}

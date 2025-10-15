@@ -9,7 +9,7 @@ and text normalization for accurate information extraction.
 import re
 import spacy
 from typing import Dict, List, Tuple, Optional
-from googletrans import Translator
+from deep_translator import GoogleTranslator
 import unicodedata
 
 
@@ -17,7 +17,7 @@ class BilingualTextProcessor:
     """Processes mixed English-Telugu FIR text for analysis."""
     
     def __init__(self):
-        self.translator = Translator()
+        self.translator = GoogleTranslator
         self.nlp = spacy.load("en_core_web_sm")
         
         # Telugu Unicode ranges
@@ -98,7 +98,7 @@ class BilingualTextProcessor:
         
         for section in telugu_sections:
             try:
-                translation = self.translator.translate(section, src='te', dest='en').text
+                translation = self.translator(source='te', target='en').translate(section)
                 text = text.replace(section, f"{section} ({translation})")
             except:
                 continue
