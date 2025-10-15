@@ -42,7 +42,7 @@ class LegalSectionMapper:
         self.offence_mappings = self._initialize_offence_mappings()
     
     def _initialize_legal_sections(self) -> Dict[str, Dict[str, LegalSection]]:
-        """Initialize the legal sections database."""
+        """Initialize the legal sections database with IPC→BNS mapping."""
         sections = {
             'BNS_2023': {
                 '309': LegalSection(
@@ -91,6 +91,46 @@ class LegalSectionMapper:
                     title='Unlawful Assembly',
                     description='Assembly of 5 or more persons with common object',
                     punishment='Imprisonment up to 6 months or fine or both',
+                    bailable=True,
+                    cognizable=True,
+                    severity='medium'
+                ),
+                '447': LegalSection(
+                    act='BNS 2023',
+                    section='447',
+                    title='Criminal Trespass',
+                    description='Entering into or upon property in possession of another',
+                    punishment='Imprisonment up to 3 months or fine up to ₹1,500 or both',
+                    bailable=True,
+                    cognizable=True,
+                    severity='low'
+                ),
+                '448': LegalSection(
+                    act='BNS 2023',
+                    section='448',
+                    title='House-trespass',
+                    description='Entering into or upon property in possession of another with intent to commit offence',
+                    punishment='Imprisonment up to 1 year or fine or both',
+                    bailable=True,
+                    cognizable=True,
+                    severity='medium'
+                ),
+                '354': LegalSection(
+                    act='BNS 2023',
+                    section='354',
+                    title='Assault or Criminal Force to Woman',
+                    description='Assault or use of criminal force to woman with intent to outrage her modesty',
+                    punishment='Imprisonment for 1-5 years and fine',
+                    bailable=True,
+                    cognizable=True,
+                    severity='high'
+                ),
+                '506': LegalSection(
+                    act='BNS 2023',
+                    section='506',
+                    title='Criminal Intimidation',
+                    description='Threatening to cause injury to person, property or reputation',
+                    punishment='Imprisonment up to 2 years or fine or both',
                     bailable=True,
                     cognizable=True,
                     severity='medium'
@@ -156,20 +196,25 @@ class LegalSectionMapper:
         return sections
     
     def _initialize_offence_mappings(self) -> Dict[str, List[str]]:
-        """Initialize offence to legal section mappings."""
+        """Initialize offence to legal section mappings with IPC→BNS mapping."""
         return {
             'caste_atrocity': ['SC_ST_Atrocities_Act_1989.3_1_r', 'SC_ST_Atrocities_Act_1989.3_2_v'],
             'robbery': ['BNS_2023.309'],
-            'assault': ['BNS_2023.115', 'BNS_2023.113'],
-            'criminal_intimidation': ['BNS_2023.351'],
+            'assault': ['BNS_2023.115', 'BNS_2023.113', 'BNS_2023.354'],
+            'criminal_intimidation': ['BNS_2023.351', 'BNS_2023.506'],
+            'trespass': ['BNS_2023.447', 'BNS_2023.448'],
             'arms_offence': ['Arms_Act_1959.25', 'Arms_Act_1959.27'],
             'rioting': ['BNS_2023.120'],
-            'vehicle_offence': ['Motor_Vehicles_Act_1988.66']
+            'vehicle_offence': ['Motor_Vehicles_Act_1988.66'],
+            'sexual_offence': ['BNS_2023.354'],
+            'cyber_crime': ['IT_Act_2000.66A', 'IT_Act_2000.67'],
+            'multi_offence': ['BNS_2023.115', 'BNS_2023.309', 'BNS_2023.351', 'BNS_2023.447']
         }
     
     def map_offences_to_sections(self, offences: List[Any]) -> List[LegalMapping]:
-        """Map extracted offences to legal sections."""
+        """Enhanced mapping with multi-label classification for multiple offences."""
         mappings = []
+        processed_offences = set()  # Track processed offences to avoid duplicates
         
         for offence in offences:
             # Handle both string offences and object offences
@@ -177,6 +222,11 @@ class LegalSectionMapper:
                 offence_type = self._categorize_offence(offence)
             else:
                 offence_type = offence.type if hasattr(offence, 'type') else str(offence)
+            
+            # Skip if already processed
+            if offence_type in processed_offences:
+                continue
+            processed_offences.add(offence_type)
             
             if offence_type in self.offence_mappings:
                 section_refs = self.offence_mappings[offence_type]
@@ -197,24 +247,97 @@ class LegalSectionMapper:
                     )
                     mappings.append(mapping)
         
+        # Enhanced multi-offence analysis
+        if len(mappings) > 1:
+            # Add combined multi-offence mapping
+            all_sections = []
+            for mapping in mappings:
+                all_sections.extend(mapping.sections)
+            
+            # Create comprehensive multi-offence mapping
+            multi_mapping = LegalMapping(
+                offence_type='multi_offence',
+                sections=all_sections,
+                investigation_steps=self._get_multi_offence_investigation_steps(mappings),
+                evidence_required=self._get_multi_offence_evidence(mappings),
+                time_limits=self._get_multi_offence_time_limits(mappings)
+            )
+            mappings.append(multi_mapping)
+        
         return mappings
     
     def _categorize_offence(self, offence_description: str) -> str:
-        """Categorize offence description to offence type."""
+        """Enhanced categorization with semantic mapping for legal terms."""
         offence_lower = offence_description.lower()
         
-        if any(keyword in offence_lower for keyword in ['caste', 'sc', 'st', 'scheduled']):
-            return 'caste_atrocity'
-        elif any(keyword in offence_lower for keyword in ['rob', 'robbery', 'snatch', 'theft']):
-            return 'robbery'
-        elif any(keyword in offence_lower for keyword in ['assault', 'hurt', 'beat', 'attack']):
-            return 'assault'
-        elif any(keyword in offence_lower for keyword in ['threat', 'intimidation']):
-            return 'criminal_intimidation'
-        elif any(keyword in offence_lower for keyword in ['pistol', 'gun', 'weapon', 'firearm']):
-            return 'arms_offence'
-        elif any(keyword in offence_lower for keyword in ['vehicle', 'motorbike', 'bike']):
-            return 'vehicle_offence'
+        # Enhanced semantic mapping with legal context
+        semantic_mappings = {
+            'caste_atrocity': [
+                'caste abuse', 'caste slur', 'caste discrimination', 'caste humiliation', 
+                'caste insult', 'abused by caste', 'caste name', 'scheduled caste',
+                'sc st', 'dalit', 'harijan', 'untouchable', 'mala lanja', 'madiga',
+                'chamar', 'bhangi', 'caste atrocity'
+            ],
+            'robbery': [
+                'rob', 'robbery', 'snatch', 'theft', 'loot', 'dacoity', 'steal',
+                'forcible', 'snatching', 'pickpocket', 'burglary', 'housebreaking'
+            ],
+            'assault': [
+                'assault', 'hurt', 'beat', 'attack', 'battery', 'strike', 'hit',
+                'punch', 'kick', 'slap', 'injure', 'wound', 'harm', 'violence',
+                'physical attack', 'bodily harm'
+            ],
+            'criminal_intimidation': [
+                'threat', 'intimidation', 'threaten', 'menace', 'coerce', 'frighten',
+                'scare', 'terrorize', 'bully', 'harass', 'warn', 'caution'
+            ],
+            'arms_offence': [
+                'pistol', 'gun', 'weapon', 'firearm', 'revolver', 'rifle', 'shotgun',
+                'country made', 'katta', 'desi katta', 'illegal arms', 'unlicensed',
+                'fire', 'shoot', 'firing', 'ballistic'
+            ],
+            'trespass': [
+                'trespass', 'enter', 'entered', 'field', 'property', 'land', 'house',
+                'premises', 'unauthorized entry', 'illegal entry', 'boundary',
+                'fence', 'gate', 'door', 'compound', 'courtyard'
+            ],
+            'vehicle_offence': [
+                'vehicle', 'motorbike', 'bike', 'car', 'auto', 'scooter', 'motorcycle',
+                'unauthorized use', 'stolen vehicle', 'joyride', 'reckless driving'
+            ],
+            'rioting': [
+                'rioting', 'unlawful assembly', 'mob', 'group', 'gang', 'crowd',
+                'assembly', 'gathering', 'disturbance', 'commotion', 'tumult'
+            ],
+            'sexual_offence': [
+                'rape', 'molestation', 'sexual assault', 'outrage modesty',
+                'eve teasing', 'harassment', 'sexual harassment', 'indecent assault'
+            ],
+            'cyber_crime': [
+                'cyber', 'online', 'internet', 'social media', 'facebook', 'whatsapp',
+                'instagram', 'twitter', 'digital', 'electronic', 'computer'
+            ]
+        }
+        
+        # Multi-label classification - check for multiple offence types
+        detected_offences = []
+        for offence_type, keywords in semantic_mappings.items():
+            if any(keyword in offence_lower for keyword in keywords):
+                detected_offences.append(offence_type)
+        
+        # Return primary offence (highest severity) or combined if multiple
+        if len(detected_offences) > 1:
+            # Prioritize by severity
+            severity_order = ['caste_atrocity', 'sexual_offence', 'arms_offence', 
+                            'robbery', 'assault', 'criminal_intimidation', 'trespass', 
+                            'rioting', 'vehicle_offence', 'cyber_crime']
+            
+            for offence_type in severity_order:
+                if offence_type in detected_offences:
+                    return offence_type
+            return 'multi_offence'  # Multiple offences detected
+        elif len(detected_offences) == 1:
+            return detected_offences[0]
         else:
             return 'general_offence'
     
@@ -312,6 +435,66 @@ class LegalSectionMapper:
             'FIR_registration': 'Immediately',
             'Charge_sheet': 'Within 90 days'
         })
+    
+    def _get_multi_offence_investigation_steps(self, mappings: List[LegalMapping]) -> List[str]:
+        """Get comprehensive investigation steps for multiple offences."""
+        all_steps = set()
+        
+        for mapping in mappings:
+            all_steps.update(mapping.investigation_steps)
+        
+        # Add multi-offence specific steps
+        multi_steps = [
+            'Register FIR for all offences immediately',
+            'Conduct comprehensive spot inspection',
+            'Record detailed statements of all witnesses',
+            'Collect evidence for each offence separately',
+            'Arrest accused persons for all applicable offences',
+            'File comprehensive charge sheet covering all offences',
+            'Coordinate with specialized units if required'
+        ]
+        
+        all_steps.update(multi_steps)
+        return list(all_steps)
+    
+    def _get_multi_offence_evidence(self, mappings: List[LegalMapping]) -> List[str]:
+        """Get comprehensive evidence requirements for multiple offences."""
+        all_evidence = set()
+        
+        for mapping in mappings:
+            all_evidence.update(mapping.evidence_required)
+        
+        # Add multi-offence specific evidence
+        multi_evidence = [
+            'Comprehensive medical certificate covering all injuries',
+            'Detailed witness statements for each offence',
+            'Recovery memos for all stolen property',
+            'Photographs of scene and injuries',
+            'Forensic evidence for each offence',
+            'Expert opinions where required'
+        ]
+        
+        all_evidence.update(multi_evidence)
+        return list(all_evidence)
+    
+    def _get_multi_offence_time_limits(self, mappings: List[LegalMapping]) -> Dict[str, str]:
+        """Get time limits for multiple offences (most stringent applies)."""
+        all_limits = {}
+        
+        for mapping in mappings:
+            for key, value in mapping.time_limits.items():
+                if key not in all_limits:
+                    all_limits[key] = value
+                else:
+                    # Use most stringent time limit
+                    if 'immediately' in value.lower():
+                        all_limits[key] = value
+                    elif '24 hours' in value and '24 hours' not in all_limits[key]:
+                        all_limits[key] = value
+                    elif '60 days' in value and '60 days' not in all_limits[key]:
+                        all_limits[key] = value
+        
+        return all_limits
     
     def get_enhanced_punishment(self, base_section: LegalSection, is_caste_atrocity: bool = False) -> str:
         """Get enhanced punishment for caste atrocity cases."""

@@ -17,6 +17,7 @@ from .information_extractor import FIRInformationExtractor
 from .legal_mapper import LegalSectionMapper
 from .web_researcher import LegalWebResearcher
 from .fir_validator import FIRValidator
+from .legal_rag_system import LegalRAGSystem
 
 
 class FIRAnalyzer:
@@ -28,6 +29,7 @@ class FIRAnalyzer:
         self.legal_mapper = LegalSectionMapper()
         self.web_researcher = LegalWebResearcher()
         self.validator = FIRValidator()
+        self.legal_rag = LegalRAGSystem()  # New RAG system
         self.openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
     
     def analyze_fir(self, fir_text: str, include_web_research: bool = True) -> Dict[str, Any]:
@@ -51,9 +53,14 @@ class FIRAnalyzer:
                 fir_text
             )
             
-            # Step 3: Map to legal sections
+            # Step 3: Enhanced mapping to legal sections with context grounding
             offences_list = extracted_info.get('Offences', [])
-            legal_mappings = self.legal_mapper.map_offences_to_sections(offences_list)
+            
+            # Add context from other extracted information for better mapping
+            context_offences = self._extract_contextual_offences(extracted_info)
+            all_offences = offences_list + context_offences
+            
+            legal_mappings = self.legal_mapper.map_offences_to_sections(all_offences)
             
             # Step 4: Generate legal summary
             legal_summary = self.legal_mapper.generate_legal_summary(
@@ -63,10 +70,10 @@ class FIRAnalyzer:
             # Step 5: Validate information
             validation_report = self.validator.generate_validation_report(extracted_info)
             
-            # Step 6: Web research (optional)
-            web_research = {}
+            # Step 6: Legal research using RAG system (local KB first, web search fallback)
+            legal_research = {}
             if include_web_research:
-                web_research = self._perform_web_research(legal_summary)
+                legal_research = self._perform_legal_research(legal_summary)
             
             # Step 7: Generate final report
             final_report = self._generate_final_report(
@@ -75,7 +82,7 @@ class FIRAnalyzer:
                 legal_mappings,
                 legal_summary,
                 validation_report,
-                web_research
+                legal_research
             )
             
             return final_report
@@ -246,8 +253,63 @@ class FIRAnalyzer:
             # Fallback to traditional extraction
             return self.information_extractor.extract_all_information(processed_text)
     
-    def _perform_web_research(self, legal_summary: Dict[str, Any]) -> Dict[str, Any]:
-        """Perform web research for legal updates and precedents."""
+    def _perform_legal_research(self, legal_summary: Dict[str, Any]) -> Dict[str, Any]:
+        """Perform legal research using RAG system (local KB first, web search fallback)."""
+        print("🔍 Starting legal research using RAG system...")
+        
+        try:
+            # Get legal sections for research
+            legal_sections = legal_summary.get('legal_sections', [])
+            case_type = legal_summary.get('case_type', 'General Criminal Case')
+            
+            # Use RAG system to get comprehensive legal research
+            rag_results = self.legal_rag.get_comprehensive_legal_research(
+                legal_sections, case_type
+            )
+            
+            print(f"📚 Local KB Results: {rag_results['local_kb_used']}")
+            print(f"🌐 Web Search Required: {rag_results['web_search_required']}")
+            
+            # If local KB is insufficient, fallback to web research
+            if rag_results['web_search_required']:
+                print("⚠️ Local KB insufficient, falling back to web search...")
+                web_research = self._perform_web_research_fallback(legal_summary)
+                
+                # Combine RAG and web research results
+                combined_research = {
+                    'local_kb_results': rag_results,
+                    'web_research': web_research,
+                    'research_method': 'hybrid',
+                    'local_kb_used': True,
+                    'web_search_used': True
+                }
+                return combined_research
+            else:
+                # Use only local KB results
+                print("✅ Using local KB results only")
+                return {
+                    'local_kb_results': rag_results,
+                    'web_research': {},
+                    'research_method': 'local_kb_only',
+                    'local_kb_used': True,
+                    'web_search_used': False
+                }
+                
+        except Exception as e:
+            print(f"❌ Error in legal research: {e}")
+            # Fallback to web research only
+            web_research = self._perform_web_research_fallback(legal_summary)
+            return {
+                'local_kb_results': {},
+                'web_research': web_research,
+                'research_method': 'web_only',
+                'local_kb_used': False,
+                'web_search_used': True,
+                'error': str(e)
+            }
+    
+    def _perform_web_research_fallback(self, legal_summary: Dict[str, Any]) -> Dict[str, Any]:
+        """Fallback web research when local KB is insufficient."""
         web_research = {
             'legal_updates': [],
             'case_precedents': [],
@@ -290,7 +352,7 @@ class FIRAnalyzer:
     
     def _generate_final_report(self, processed_text: Dict, extracted_info: Dict,
                              legal_mappings: List, legal_summary: Dict,
-                             validation_report: Dict, web_research: Dict) -> Dict[str, Any]:
+                             validation_report: Dict, legal_research: Dict) -> Dict[str, Any]:
         """Generate comprehensive final report."""
         
         # Convert dataclass objects to dictionaries for JSON serialization
@@ -341,10 +403,10 @@ class FIRAnalyzer:
             
             'validation_report': validation_report,
             
-            'web_research': web_research,
+            'legal_research': legal_research,
             
             'recommendations': self._generate_recommendations(
-                legal_summary, validation_report, web_research
+                legal_summary, validation_report, legal_research
             ),
             
             'export_formats': {
@@ -356,8 +418,46 @@ class FIRAnalyzer:
         
         return final_report
     
+    def _extract_contextual_offences(self, extracted_info: Dict[str, Any]) -> List[str]:
+        """Extract additional offences from context and other fields."""
+        contextual_offences = []
+        
+        # Check for trespass from place/address context
+        place = extracted_info.get('Place', '')
+        if place and any(keyword in place.lower() for keyword in ['field', 'property', 'house', 'premises']):
+            contextual_offences.append('trespass')
+        
+        # Check for caste atrocity from complainant community
+        complainant = extracted_info.get('Complainant', {})
+        if complainant:
+            community = complainant.get('Community', '')
+            if community and any(keyword in community.lower() for keyword in ['sc', 'st', 'scheduled', 'caste']):
+                contextual_offences.append('caste atrocity')
+        
+        # Check for arms offence from weapons used
+        weapons = extracted_info.get('WeaponsUsed', [])
+        if weapons and any(keyword in ' '.join(weapons).lower() for keyword in ['pistol', 'gun', 'firearm', 'weapon']):
+            contextual_offences.append('arms offence')
+        
+        # Check for assault from injuries
+        injuries = extracted_info.get('Injuries', '')
+        if injuries and any(keyword in injuries.lower() for keyword in ['injury', 'hurt', 'wound', 'bleeding']):
+            contextual_offences.append('assault')
+        
+        # Check for criminal intimidation from threats
+        threats = extracted_info.get('Threats', [])
+        if threats and any(keyword in ' '.join(threats).lower() for keyword in ['threat', 'kill', 'harm', 'intimidate']):
+            contextual_offences.append('criminal intimidation')
+        
+        # Check for robbery from property loss
+        property_loss = extracted_info.get('PropertyLoss', [])
+        if property_loss and any(keyword in ' '.join(property_loss).lower() for keyword in ['stolen', 'snatch', 'rob', 'theft']):
+            contextual_offences.append('robbery')
+        
+        return contextual_offences
+    
     def _generate_recommendations(self, legal_summary: Dict, validation_report: Dict,
-                                web_research: Dict) -> List[str]:
+                                legal_research: Dict) -> List[str]:
         """Generate actionable recommendations."""
         recommendations = []
         
@@ -380,11 +480,23 @@ class FIRAnalyzer:
         if not bail_status.get('bail_available', True):
             recommendations.append('Non-bailable offences present - immediate arrest required')
         
-        # Based on web research
-        if web_research.get('legal_updates'):
+        # Based on legal research
+        if legal_research.get('local_kb_used'):
+            recommendations.append('Local knowledge base provided comprehensive legal context')
+        
+        if legal_research.get('web_search_used'):
+            recommendations.append('Additional web research conducted for latest updates')
+        
+        # Check for legal updates
+        local_results = legal_research.get('local_kb_results', {})
+        web_results = legal_research.get('web_research', {})
+        
+        if (local_results.get('updates') or 
+            web_results.get('legal_updates')):
             recommendations.append('Check for recent legal amendments affecting this case')
         
-        if web_research.get('case_precedents'):
+        if (local_results.get('precedents') or 
+            web_results.get('case_precedents')):
             recommendations.append('Review relevant case precedents for investigation guidance')
         
         return recommendations
