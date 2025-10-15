@@ -129,46 +129,64 @@ Local villagers (Suresh, Koteswara Rao, and Lakshmi) witnessed the incident but 
                                 st.write(f"**Bailable:** {'Yes' if section.get('bailable') else 'No'}")
                                 st.write(f"**Cognizable:** {'Yes' if section.get('cognizable') else 'No'}")
                     
-                    # Extracted Information
+                    # Extracted Information (Enhanced Format)
                     extracted_info = result.get('extracted_information', {})
                     if extracted_info:
-                        st.markdown("### 📊 Extracted Information")
+                        st.markdown("### 📊 Extracted Information (Enhanced Format)")
                         
-                        # Complainant
-                        complainant = extracted_info.get('complainant', {})
+                        # Complainant (Enhanced Format)
+                        complainant = extracted_info.get('Complainant', {})
                         if complainant:
                             st.markdown("#### 👤 Complainant Details:")
                             col1, col2, col3 = st.columns(3)
                             with col1:
-                                st.write(f"**Name:** {complainant.get('name', 'N/A')}")
-                                st.write(f"**Age:** {complainant.get('age', 'N/A')}")
+                                st.write(f"**Name:** {complainant.get('Name', 'N/A')}")
+                                st.write(f"**Father:** {complainant.get('Father', 'N/A')}")
                             with col2:
-                                st.write(f"**Community:** {complainant.get('community', 'N/A')}")
-                                st.write(f"**Occupation:** {complainant.get('occupation', 'N/A')}")
+                                st.write(f"**Age:** {complainant.get('Age', 'N/A')}")
+                                st.write(f"**Community:** {complainant.get('Community', 'N/A')}")
                             with col3:
-                                st.write(f"**Address:** {complainant.get('address', 'N/A')}")
+                                st.write(f"**Occupation:** {complainant.get('Occupation', 'N/A')}")
+                                st.write(f"**Address:** {complainant.get('Address', 'N/A')}")
                         
-                        # Accused
-                        accused = extracted_info.get('accused', [])
+                        # DateTime and Place
+                        st.markdown("#### 📅 Incident Details:")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.write(f"**Date & Time:** {extracted_info.get('DateTime', 'N/A')}")
+                        with col2:
+                            st.write(f"**Place:** {extracted_info.get('Place', 'N/A')}")
+                        
+                        # Accused (Enhanced Format)
+                        accused = extracted_info.get('Accused', [])
                         if accused:
                             st.markdown("#### 🚨 Accused Details:")
                             for i, acc in enumerate(accused, 1):
-                                with st.expander(f"Accused {i}: {acc.get('name', 'Unknown')}"):
-                                    st.write(f"**Age:** {acc.get('age', 'N/A')}")
-                                    st.write(f"**Father:** {acc.get('father_name', 'N/A')}")
-                                    st.write(f"**Address:** {acc.get('address', 'N/A')}")
-                                    st.write(f"**History:** {acc.get('history', 'N/A')}")
+                                with st.expander(f"Accused {i}: {acc.get('Name', 'Unknown')}"):
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        st.write(f"**Age:** {acc.get('Age', 'N/A')}")
+                                        st.write(f"**Relation:** {acc.get('Relation', 'N/A')}")
+                                    with col2:
+                                        st.write(f"**History:** {acc.get('History', 'N/A')}")
+                                        st.write(f"**Occupation:** {acc.get('Occupation', 'N/A')}")
+                                    st.write(f"**Address:** {acc.get('Address', 'N/A')}")
                         
-                        # Incident Details
-                        incident = extracted_info.get('incident', {})
-                        if incident:
-                            st.markdown("#### 📅 Incident Details:")
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.write(f"**Date:** {incident.get('date', 'N/A')}")
-                                st.write(f"**Time:** {incident.get('time', 'N/A')}")
-                            with col2:
-                                st.write(f"**Place:** {incident.get('place', 'N/A')}")
+                        # Additional Details
+                        st.markdown("#### 🔍 Additional Details:")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.write(f"**Vehicles:** {', '.join(extracted_info.get('Vehicles', []))}")
+                            st.write(f"**Weapons Used:** {', '.join(extracted_info.get('WeaponsUsed', []))}")
+                            st.write(f"**Offences:** {', '.join(extracted_info.get('Offences', []))}")
+                        with col2:
+                            st.write(f"**Injuries:** {extracted_info.get('Injuries', 'N/A')}")
+                            st.write(f"**Property Loss:** {', '.join(extracted_info.get('PropertyLoss', []))}")
+                            st.write(f"**Threats:** {', '.join(extracted_info.get('Threats', []))}")
+                        
+                        # Witnesses and Impact
+                        st.write(f"**Witnesses:** {', '.join(extracted_info.get('Witnesses', []))}")
+                        st.write(f"**Impact:** {extracted_info.get('Impact', 'N/A')}")
                     
                     # Validation Report
                     validation_report = result.get('validation_report', {})
