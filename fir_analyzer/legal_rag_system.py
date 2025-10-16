@@ -210,23 +210,61 @@ class LegalRAGSystem:
         
         Text: {combined_content}
         
-        Return a JSON object with the following structure:
+        IMPORTANT: Return ONLY a valid JSON object with the following structure. No markdown, no explanations, no additional text.
+        
         {{
             "title": "Section title",
-            "description": "Section description",
+            "description": "Section description", 
             "punishment": "Punishment details",
-            "bailable": true/false,
-            "cognizable": true/false,
-            "severity": "low/medium/high"
+            "bailable": true,
+            "cognizable": true,
+            "severity": "medium"
         }}
         
         If information is not found, use "Not specified" for text fields and null for boolean fields.
+        Return ONLY the JSON object.
         """
         
         try:
             response = self.llm.invoke(prompt)
-            extracted_info = json.loads(response.content)
-            section_info.update(extracted_info)
+            response_content = response.content.strip()
+            
+            # Clean the response to extract JSON
+            if response_content.startswith('```json'):
+                response_content = response_content[7:]
+            elif response_content.startswith('```'):
+                response_content = response_content[3:]
+            
+            if response_content.endswith('```'):
+                response_content = response_content[:-3]
+            
+            response_content = response_content.strip()
+            
+            # Try to find JSON object boundaries
+            start_idx = response_content.find('{')
+            end_idx = response_content.rfind('}')
+            
+            if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                response_content = response_content[start_idx:end_idx + 1]
+            
+            if response_content and response_content.strip():
+                extracted_info = json.loads(response_content)
+                section_info.update(extracted_info)
+            else:
+                print(f"Empty response for section info extraction")
+                # Use default values
+                section_info.update({
+                    "title": "Not specified",
+                    "description": "Not specified", 
+                    "punishment": "Not specified",
+                    "bailable": None,
+                    "cognizable": None,
+                    "severity": "medium"
+                })
+                
+        except json.JSONDecodeError as e:
+            print(f"JSON parsing error in section info: {e}")
+            print(f"Raw response: {response_content}")
         except Exception as e:
             print(f"Error extracting section info: {e}")
         
@@ -264,23 +302,54 @@ class LegalRAGSystem:
         
         Text: {combined_content}
         
-        Return a JSON array of case precedents with the following structure:
+        IMPORTANT: Return ONLY a valid JSON array. No markdown, no explanations, no additional text.
+        
         [
             {{
                 "case_name": "Case name",
                 "citation": "Court citation",
                 "year": "Year",
                 "key_principle": "Key legal principle",
-                "relevance": "High/Medium/Low"
+                "relevance": "High"
             }}
         ]
         
-        If no precedents are found, return an empty array.
+        If no precedents are found, return an empty array: []
+        Return ONLY the JSON array.
         """
         
         try:
             response = self.llm.invoke(prompt)
-            precedents = json.loads(response.content)
+            response_content = response.content.strip()
+            
+            # Clean the response to extract JSON
+            if response_content.startswith('```json'):
+                response_content = response_content[7:]
+            elif response_content.startswith('```'):
+                response_content = response_content[3:]
+            
+            if response_content.endswith('```'):
+                response_content = response_content[:-3]
+            
+            response_content = response_content.strip()
+            
+            # Try to find JSON array boundaries
+            start_idx = response_content.find('[')
+            end_idx = response_content.rfind(']')
+            
+            if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                response_content = response_content[start_idx:end_idx + 1]
+            
+            if response_content:
+                precedents = json.loads(response_content)
+            else:
+                print(f"Empty response for precedents extraction")
+                precedents = []
+                
+        except json.JSONDecodeError as e:
+            print(f"JSON parsing error in precedents: {e}")
+            print(f"Raw response: {response_content}")
+            precedents = []
         except Exception as e:
             print(f"Error extracting precedents: {e}")
             precedents = []
@@ -319,22 +388,53 @@ class LegalRAGSystem:
         
         Text: {combined_content}
         
-        Return a JSON array of guidelines with the following structure:
+        IMPORTANT: Return ONLY a valid JSON array. No markdown, no explanations, no additional text.
+        
         [
             {{
                 "guideline": "Guideline description",
                 "source": "Source document",
-                "importance": "Critical/High/Medium/Low",
+                "importance": "Critical",
                 "time_limit": "Time limit if specified"
             }}
         ]
         
-        If no guidelines are found, return an empty array.
+        If no guidelines are found, return an empty array: []
+        Return ONLY the JSON array.
         """
         
         try:
             response = self.llm.invoke(prompt)
-            guidelines = json.loads(response.content)
+            response_content = response.content.strip()
+            
+            # Clean the response to extract JSON
+            if response_content.startswith('```json'):
+                response_content = response_content[7:]
+            elif response_content.startswith('```'):
+                response_content = response_content[3:]
+            
+            if response_content.endswith('```'):
+                response_content = response_content[:-3]
+            
+            response_content = response_content.strip()
+            
+            # Try to find JSON array boundaries
+            start_idx = response_content.find('[')
+            end_idx = response_content.rfind(']')
+            
+            if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                response_content = response_content[start_idx:end_idx + 1]
+            
+            if response_content:
+                guidelines = json.loads(response_content)
+            else:
+                print(f"Empty response for guidelines extraction")
+                guidelines = []
+                
+        except json.JSONDecodeError as e:
+            print(f"JSON parsing error in guidelines: {e}")
+            print(f"Raw response: {response_content}")
+            guidelines = []
         except Exception as e:
             print(f"Error extracting guidelines: {e}")
             guidelines = []
@@ -376,10 +476,11 @@ class LegalRAGSystem:
         
         Text: {combined_content}
         
-        Return a JSON array of updates with the following structure:
+        IMPORTANT: Return ONLY a valid JSON array. No markdown, no explanations, no additional text.
+        
         [
             {{
-                "update_type": "Amendment/Repeal/New Section",
+                "update_type": "Amendment",
                 "date": "Date of update",
                 "description": "Description of update",
                 "impact": "Impact on legal practice",
@@ -387,12 +488,42 @@ class LegalRAGSystem:
             }}
         ]
         
-        If no updates are found, return an empty array.
+        If no updates are found, return an empty array: []
+        Return ONLY the JSON array.
         """
         
         try:
             response = self.llm.invoke(prompt)
-            updates = json.loads(response.content)
+            response_content = response.content.strip()
+            
+            # Clean the response to extract JSON
+            if response_content.startswith('```json'):
+                response_content = response_content[7:]
+            elif response_content.startswith('```'):
+                response_content = response_content[3:]
+            
+            if response_content.endswith('```'):
+                response_content = response_content[:-3]
+            
+            response_content = response_content.strip()
+            
+            # Try to find JSON array boundaries
+            start_idx = response_content.find('[')
+            end_idx = response_content.rfind(']')
+            
+            if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                response_content = response_content[start_idx:end_idx + 1]
+            
+            if response_content:
+                updates = json.loads(response_content)
+            else:
+                print(f"Empty response for updates extraction")
+                updates = []
+                
+        except json.JSONDecodeError as e:
+            print(f"JSON parsing error in updates: {e}")
+            print(f"Raw response: {response_content}")
+            updates = []
         except Exception as e:
             print(f"Error extracting updates: {e}")
             updates = []
@@ -436,10 +567,18 @@ class LegalRAGSystem:
             research_results['guidelines'] = guidelines['guidelines']
         
         # Determine if web search is needed
-        if (not research_results['legal_sections'] and 
-            not research_results['precedents'] and 
-            not research_results['guidelines']):
+        total_results = (len(research_results['legal_sections']) + 
+                        len(research_results['precedents']) + 
+                        len(research_results['guidelines']) + 
+                        len(research_results['updates']))
+        
+        if total_results < 2:  # Need at least 2 results from local KB
             research_results['web_search_required'] = True
             research_results['local_kb_used'] = False
+            print(f"⚠️ Local KB insufficient (only {total_results} results), web search required")
+        else:
+            research_results['web_search_required'] = False
+            research_results['local_kb_used'] = True
+            print(f"✅ Local KB sufficient ({total_results} results found)")
         
         return research_results

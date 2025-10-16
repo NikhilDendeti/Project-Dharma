@@ -274,42 +274,54 @@ class FIRValidator:
         return results
     
     def validate_complete_fir(self, extracted_info: Dict[str, Any]) -> ValidationSummary:
-        """Validate complete FIR information."""
+        """Validate complete FIR information with improved logic."""
         all_results = []
         
-        # Validate complainant
-        complainant = extracted_info.get('complainant')
-        all_results.extend(self.validate_complainant(complainant))
+        # Validate complainant - use correct field name
+        complainant = extracted_info.get('Complainant', {})
+        if complainant:
+            all_results.extend(self.validate_complainant_dict(complainant))
         
-        # Validate accused
-        accused = extracted_info.get('accused', [])
-        all_results.extend(self.validate_accused(accused))
+        # Validate accused - use correct field name
+        accused = extracted_info.get('Accused', [])
+        if accused:
+            all_results.extend(self.validate_accused_list(accused))
         
-        # Validate incident
-        incident = extracted_info.get('incident', {})
-        all_results.extend(self.validate_incident_details(incident))
+        # Validate incident details from extracted format
+        all_results.extend(self.validate_extracted_incident(extracted_info))
         
-        # Validate offences
-        offences = extracted_info.get('offences', [])
-        all_results.extend(self.validate_offences(offences))
+        # Validate offences - use correct field name
+        offences = extracted_info.get('Offences', [])
+        if offences:
+            all_results.extend(self.validate_offences_list(offences))
         
-        # Validate evidence
-        all_results.extend(self.validate_evidence(extracted_info))
+        # Validate evidence from extracted format
+        all_results.extend(self.validate_extracted_evidence(extracted_info))
         
-        # Calculate summary
+        # Calculate summary with more lenient scoring
         total_fields = len(all_results)
         valid_fields = sum(1 for result in all_results if result.is_valid)
-        completeness_score = (valid_fields / total_fields * 100) if total_fields > 0 else 0
+        completeness_score = (valid_fields / total_fields * 100) if total_fields > 0 else 85  # Default to good score
         
-        critical_errors = [result.error_message for result in all_results 
-                          if not result.is_valid and result.error_message]
+        # Only show critical errors for truly missing essential information
+        critical_errors = []
+        for result in all_results:
+            if not result.is_valid and result.error_message:
+                # Only include truly critical errors
+                if any(keyword in result.error_message.lower() for keyword in ['complainant', 'date', 'place']):
+                    critical_errors.append(result.error_message)
         
         warnings = []
         suggestions = []
         
+        # Only add helpful suggestions, not obvious ones
         for result in all_results:
-            if result.suggestions:
-                suggestions.extend(result.suggestions)
+            if result.suggestions and len(result.suggestions) > 0:
+                # Filter out generic suggestions
+                filtered_suggestions = [s for s in result.suggestions 
+                                     if not any(generic in s.lower() for generic in 
+                                              ['extract', 'check if', 'review fir text'])]
+                suggestions.extend(filtered_suggestions)
         
         return ValidationSummary(
             is_valid=len(critical_errors) == 0,
@@ -318,6 +330,133 @@ class FIRValidator:
             warnings=warnings,
             suggestions=list(set(suggestions))  # Remove duplicates
         )
+    
+    def validate_complainant_dict(self, complainant: Dict[str, Any]) -> List[ValidationResult]:
+        """Validate complainant information from extracted format."""
+        results = []
+        
+        # Check if complainant has essential information
+        name = complainant.get('Name', '')
+        if name and name != 'N/A':
+            results.append(ValidationResult(
+                field='complainant.name',
+                is_valid=True,
+                value=name
+            ))
+        else:
+            results.append(ValidationResult(
+                field='complainant.name',
+                is_valid=False,
+                value=name,
+                error_message='Complainant name is missing'
+            ))
+        
+        return results
+    
+    def validate_accused_list(self, accused_list: List[Dict[str, Any]]) -> List[ValidationResult]:
+        """Validate accused information from extracted format."""
+        results = []
+        
+        if not accused_list:
+            results.append(ValidationResult(
+                field='accused',
+                is_valid=False,
+                value=None,
+                error_message='No accused persons identified'
+            ))
+        else:
+            for i, accused in enumerate(accused_list):
+                name = accused.get('Name', '')
+                if name and name != 'N/A' and name != 'Unknown':
+                    results.append(ValidationResult(
+                        field=f'accused[{i}].name',
+                        is_valid=True,
+                        value=name
+                    ))
+        
+        return results
+    
+    def validate_extracted_incident(self, extracted_info: Dict[str, Any]) -> List[ValidationResult]:
+        """Validate incident details from extracted format."""
+        results = []
+        
+        # Check date and time
+        date_time = extracted_info.get('DateTime', '')
+        if date_time and date_time != 'N/A':
+            results.append(ValidationResult(
+                field='incident.date_time',
+                is_valid=True,
+                value=date_time
+            ))
+        else:
+            results.append(ValidationResult(
+                field='incident.date_time',
+                is_valid=False,
+                value=date_time,
+                error_message='Incident date and time is missing'
+            ))
+        
+        # Check place
+        place = extracted_info.get('Place', '')
+        if place and place != 'N/A':
+            results.append(ValidationResult(
+                field='incident.place',
+                is_valid=True,
+                value=place
+            ))
+        else:
+            results.append(ValidationResult(
+                field='incident.place',
+                is_valid=False,
+                value=place,
+                error_message='Incident place is missing'
+            ))
+        
+        return results
+    
+    def validate_offences_list(self, offences: List[str]) -> List[ValidationResult]:
+        """Validate offences from extracted format."""
+        results = []
+        
+        if not offences:
+            results.append(ValidationResult(
+                field='offences',
+                is_valid=False,
+                value=None,
+                error_message='No offences identified'
+            ))
+        else:
+            results.append(ValidationResult(
+                field='offences',
+                is_valid=True,
+                value=offences
+            ))
+        
+        return results
+    
+    def validate_extracted_evidence(self, extracted_info: Dict[str, Any]) -> List[ValidationResult]:
+        """Validate evidence from extracted format."""
+        results = []
+        
+        # Check witnesses
+        witnesses = extracted_info.get('Witnesses', [])
+        if witnesses:
+            results.append(ValidationResult(
+                field='witnesses',
+                is_valid=True,
+                value=witnesses
+            ))
+        
+        # Check weapons
+        weapons = extracted_info.get('WeaponsUsed', [])
+        if weapons:
+            results.append(ValidationResult(
+                field='weapons',
+                is_valid=True,
+                value=weapons
+            ))
+        
+        return results
     
     def _validate_name(self, name: str) -> Dict[str, Any]:
         """Validate name format."""
@@ -485,21 +624,31 @@ class FIRValidator:
         return {'is_valid': True}
     
     def generate_validation_report(self, extracted_info: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate comprehensive validation report."""
+        """Generate simplified validation report."""
         validation_summary = self.validate_complete_fir(extracted_info)
         
-        report = {
-            'validation_summary': {
-                'is_valid': validation_summary.is_valid,
-                'completeness_score': round(validation_summary.completeness_score, 2),
-                'critical_errors_count': len(validation_summary.critical_errors),
-                'suggestions_count': len(validation_summary.suggestions)
-            },
-            'critical_errors': validation_summary.critical_errors,
-            'suggestions': validation_summary.suggestions,
-            'recommendations': self._generate_recommendations(validation_summary),
-            'quality_score': self._calculate_quality_score(validation_summary)
-        }
+        # Only show validation report if there are actual issues
+        if validation_summary.completeness_score >= 80 and len(validation_summary.critical_errors) == 0:
+            # Good quality - minimal report
+            report = {
+                'validation_summary': {
+                    'is_valid': True,
+                    'completeness_score': round(validation_summary.completeness_score, 2),
+                    'quality_score': 'Good'
+                }
+            }
+        else:
+            # Issues found - show relevant information
+            report = {
+                'validation_summary': {
+                    'is_valid': validation_summary.is_valid,
+                    'completeness_score': round(validation_summary.completeness_score, 2),
+                    'critical_errors_count': len(validation_summary.critical_errors),
+                    'quality_score': self._calculate_quality_score(validation_summary)
+                },
+                'critical_errors': validation_summary.critical_errors[:3],  # Limit to 3 most important
+                'suggestions': validation_summary.suggestions[:2]  # Limit to 2 most helpful
+            }
         
         return report
     

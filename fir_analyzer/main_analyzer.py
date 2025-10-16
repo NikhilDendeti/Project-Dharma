@@ -458,48 +458,26 @@ class FIRAnalyzer:
     
     def _generate_recommendations(self, legal_summary: Dict, validation_report: Dict,
                                 legal_research: Dict) -> List[str]:
-        """Generate actionable recommendations."""
+        """Generate essential recommendations only."""
         recommendations = []
         
-        # Based on validation
-        if validation_report.get('validation_summary', {}).get('completeness_score', 0) < 80:
-            recommendations.append('Review FIR text for missing critical information')
-        
-        # Based on legal analysis
+        # Only add critical recommendations based on case type
         case_type = legal_summary.get('case_type', '')
         if 'SC/ST' in case_type or 'Caste' in case_type:
             recommendations.append('Immediate registration of FIR under SC/ST Atrocities Act')
             recommendations.append('Inform District SP within 24 hours')
-            recommendations.append('Appoint Special Public Prosecutor')
         
+        # Only add if investigation priority is highest
         if legal_summary.get('investigation_priority') == 'highest':
             recommendations.append('Prioritize investigation - high priority case')
         
-        # Based on bail status
+        # Only add if bail is not available
         bail_status = legal_summary.get('bail_status', {})
         if not bail_status.get('bail_available', True):
             recommendations.append('Non-bailable offences present - immediate arrest required')
         
-        # Based on legal research
-        if legal_research.get('local_kb_used'):
-            recommendations.append('Local knowledge base provided comprehensive legal context')
-        
-        if legal_research.get('web_search_used'):
-            recommendations.append('Additional web research conducted for latest updates')
-        
-        # Check for legal updates
-        local_results = legal_research.get('local_kb_results', {})
-        web_results = legal_research.get('web_research', {})
-        
-        if (local_results.get('updates') or 
-            web_results.get('legal_updates')):
-            recommendations.append('Check for recent legal amendments affecting this case')
-        
-        if (local_results.get('precedents') or 
-            web_results.get('case_precedents')):
-            recommendations.append('Review relevant case precedents for investigation guidance')
-        
-        return recommendations
+        # Limit to maximum 3 recommendations
+        return recommendations[:3]
     
     def analyze_fir_from_sample(self, sample_text: str = None) -> Dict[str, Any]:
         """Analyze the provided sample FIR text."""
