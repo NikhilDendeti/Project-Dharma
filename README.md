@@ -32,7 +32,7 @@ Project Dharma/
 ├── main.py                          # FastAPI backend application
 ├── Streamlit.py                     # Streamlit frontend interface
 ├── rag_chain.py                     # RAG chain for legal Q&A
-├── requirements.txt                  # Project dependencies
+├── requriments.txt                  # Project dependencies (note: filename has typo)
 ├── .env                            # Environment variables
 ├── kb/                             # Knowledge base (PDF documents)
 │   ├── 1701607577CrimeinIndia2022Book1 (1).pdf

@@ -21,11 +21,13 @@ from .information_extractor import FIRInformationExtractor
 from .legal_mapper import LegalSectionMapper
 from .web_researcher import LegalWebResearcher
 from .fir_validator import FIRValidator
+from .main_analyzer import FIRAnalyzer
 
 __all__ = [
     "BilingualTextProcessor",
     "FIRInformationExtractor", 
     "LegalSectionMapper",
     "LegalWebResearcher",
-    "FIRValidator"
+    "FIRValidator",
+    "FIRAnalyzer"
 ]
